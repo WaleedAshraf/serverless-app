@@ -1,8 +1,6 @@
 <form id="form" enctype='application/json' action="https://ihdyhw2gui.execute-api.us-east-1.amazonaws.com/stage/imagemanip?operation=" Accept="image/*" Content-Type="image/*" method="POST">
   Operation: <input type="text" name="operation" id="operation"><br>
   Options: <input type="text" name="options"><br>
-  Width: <input type="text" name="width"><br>
-  Height: <input type="text" name="height"><br>
   Your image: <input type="file" name="pic" id="pic" onchange="getBase64()"><br>
   <input type="hidden" name="base64Image" id="base64Image" value="">
   <img src="" height="200" alt="Image preview..." style="display:none">
