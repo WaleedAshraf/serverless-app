@@ -5,25 +5,7 @@ const fs = require('fs');
 const AWS = require('aws-sdk');
 const s3 = new AWS.S3();
 
-const postProcessResource = (resource, fn) => {
-  let ret = null;
-  if (resource) {
-    if (fn) {
-      // perform passed function
-      ret = fn(resource);
-    }
-    try {
-      // delete file
-      fs.unlinkSync(resource);
-    } catch (err) {
-      console.log('err:', err);
-    }
-  }
-  return ret;
-};
-
-const convert = async (event, callback) => {
-  const body = JSON.parse(event.body);
+const convert = async (body) => {
   const customArgs = body.customArgs.split(',') || [];
   let outputExtension = body.outputExtension ? body.outputExtension : 'png';
   let inputFile = null;
@@ -44,22 +26,19 @@ const convert = async (event, callback) => {
   
     // [input, customArgs, output]
     await imConvert(customArgs);
-    // let fileBuffer = new Buffer(fs.readFileSync(outputFile));
-    // fs.unlinkSync(outputFile);
-    let fileBuffer = postProcessResource(outputFile, (file) => new Buffer(fs.readFileSync(file)));
+    let fileBuffer = new Buffer(fs.readFileSync(outputFile));
+    fs.unlinkSync(outputFile);
     await putfile(fileBuffer);
-    sendRes(200, '<img src="data:image/png;base64,' + fileBuffer.toString('base64') + '"//>', callback);
+    return sendRes(200, '<img src="data:image/png;base64,' + fileBuffer.toString('base64') + '"//>');
   } catch (e) {
     console.log(`Error:${e}`);
-    sendRes(500, e, callback);
+    return sendRes(500, e);
   }
 };
 
-const getPage = async (callback) => {
-  fs.readFile('./form.html', 'utf8', (err, data) => {
-    if (err) throw err;
-    sendRes(200, data, callback);
-  });
+const getPage = () => {
+  let data = fs.readFileSync('./form.html', 'utf8');
+  return sendRes(200, data);
 }
 
 const imConvert = (params) => {
@@ -75,7 +54,7 @@ const imConvert = (params) => {
  });
 }
 
-const sendRes = (status, body, callback) => {
+const sendRes = (status, body) => {
   var response = {
     statusCode: status,
     headers: {
@@ -83,7 +62,8 @@ const sendRes = (status, body, callback) => {
     },
     body: body
   };
-  callback(null, response);
+  console.log('returning res:',response);
+  return response;
 }
 
 const putfile = async (buffer) => {
@@ -96,30 +76,31 @@ const putfile = async (buffer) => {
 }
 
 
-exports.handler = (event, context, callback) => {
+exports.handler = async (event) => {
   console.log('event:',JSON.stringify(event));
+  let data = null;
   const operation = event.queryStringParameters ? event.queryStringParameters.operation : null;
   if (event.httpMethod == 'GET') {
-    getPage(callback);
+    return getPage();
   } else {
     try {
-      JSON.parse(event.body);
+      data = JSON.parse(event.body);
     } catch (e) {
-      let bodyData = {
+      console.log('e is:',e);
+      data = {
         "customArgs": decodeURIComponent(event.body.split('&')[1].split('=')[1]),
         "base64Image": decodeURIComponent(event.body.split('&')[3].split('=')[1])
       }
-      event.body = JSON.stringify(bodyData);
     }
     switch (operation) {
       case 'ping':
-        sendRes(200, 'pong', callback);
+        return sendRes(200, 'pong');
         break;
       case 'convert':
-        convert(event, callback);
+        return await convert(data);
         break;
       default:
-        sendRes(401, '`Unrecognized operation "${operation}"`', callback)
+        return sendRes(401, '`Unrecognized operation "${operation}"`');
     }
   }
 };
