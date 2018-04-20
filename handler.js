@@ -5,12 +5,47 @@ const fs = require('fs');
 const AWS = require('aws-sdk');
 const s3 = new AWS.S3();
 
+exports.handler = async (event) => {
+  let data = null;
+  const operation = event.queryStringParameters ? event.queryStringParameters.operation : null;
+  if (event.httpMethod == 'GET') {
+    return getPage();
+  } else {
+    try {
+      data = JSON.parse(event.body);
+    } catch (e) {
+      data = {
+        "customArgs": decodeURIComponent(event.body.split('&')[1].split('=')[1]),
+        "base64Image": decodeURIComponent(event.body.split('&')[3].split('=')[1])
+      }
+    }
+    switch (operation) {
+      case 'ping':
+        return sendRes(200, 'pong');
+      case 'convert':
+        return await convert(data);
+      default:
+        return sendRes(401, '`Unrecognized operation "${operation}"`');
+    }
+  }
+};
+
+const sendRes = (status, body) => {
+  var response = {
+    statusCode: status,
+    headers: {
+      "Content-Type": "text/html"
+    },
+    body: body
+  };
+  return response;
+}
+
 const convert = async (body) => {
   const customArgs = body.customArgs.split(',') || [];
   let outputExtension = body.outputExtension ? body.outputExtension : 'png';
   let inputFile = null;
   let outputFile = null;
-  let output = null;
 
   try {
     if (body.base64Image) {
@@ -19,11 +54,10 @@ const convert = async (body) => {
       fs.writeFileSync(inputFile, buffer);
       customArgs.unshift(inputFile);
     }
-  
+
     outputFile = `/tmp/outputFile.${outputExtension}`;
     customArgs.push(outputFile);
-    console.log('customArgs:', customArgs);
-  
+
     // [input, customArgs, output]
     await imConvert(customArgs);
     let fileBuffer = new Buffer(fs.readFileSync(outputFile));
@@ -36,13 +70,8 @@ const convert = async (body) => {
   }
 };
 
-const getPage = () => {
-  let data = fs.readFileSync('./form.html', 'utf8');
-  return sendRes(200, data);
-}
-
 const imConvert = (params) => {
-  return new Promise(function(res, rej){
+  return new Promise(function (res, rej) {
     im.convert(params, (err) => {
       if (err) {
         console.log(`Error${err}`);
@@ -51,19 +80,7 @@ const imConvert = (params) => {
         res('operation completed successfully');
       }
     });
- });
-}
-
-const sendRes = (status, body) => {
-  var response = {
-    statusCode: status,
-    headers: {
-      "Content-Type": "text/html"
-    },
-    body: body
-  };
-  console.log('returning res:',response);
-  return response;
+  });
 }
 
 const putfile = async (buffer) => {
@@ -72,35 +89,10 @@ const putfile = async (buffer) => {
     Key: 'images/' + Date.now().toString() + '.png',
     Body: buffer
   };
-  return await s3.putObject(params);
+  return await s3.putObject(params).promise();
 }
 
-
-exports.handler = async (event) => {
-  console.log('event:',JSON.stringify(event));
-  let data = null;
-  const operation = event.queryStringParameters ? event.queryStringParameters.operation : null;
-  if (event.httpMethod == 'GET') {
-    return getPage();
-  } else {
-    try {
-      data = JSON.parse(event.body);
-    } catch (e) {
-      console.log('e is:',e);
-      data = {
-        "customArgs": decodeURIComponent(event.body.split('&')[1].split('=')[1]),
-        "base64Image": decodeURIComponent(event.body.split('&')[3].split('=')[1])
-      }
-    }
-    switch (operation) {
-      case 'ping':
-        return sendRes(200, 'pong');
-        break;
-      case 'convert':
-        return await convert(data);
-        break;
-      default:
-        return sendRes(401, '`Unrecognized operation "${operation}"`');
-    }
-  }
-};
+const getPage = () => {
+  let data = fs.readFileSync('./form.html', 'utf8');
+  return sendRes(200, data);
+}
