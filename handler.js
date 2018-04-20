@@ -23,7 +23,7 @@ exports.handler = async (event) => {
       case 'ping':
         return sendRes(200, 'pong');
       case 'convert':
-        return await convert(data);
+        return await operate(data);
       default:
         return sendRes(401, '`Unrecognized operation "${operation}"`');
     }
@@ -41,7 +41,7 @@ const sendRes = (status, body) => {
   return response;
 }
 
-const convert = async (body) => {
+const operate = async (body) => {
   const customArgs = body.customArgs.split(',') || [];
   let outputExtension = body.outputExtension ? body.outputExtension : 'png';
   let inputFile = null;
@@ -59,7 +59,7 @@ const convert = async (body) => {
     customArgs.push(outputFile);
 
     // [input, customArgs, output]
-    await imConvert(customArgs);
+    await performConvert(customArgs);
     let fileBuffer = new Buffer(fs.readFileSync(outputFile));
     fs.unlinkSync(outputFile);
     await putfile(fileBuffer);
@@ -70,7 +70,7 @@ const convert = async (body) => {
   }
 };
 
-const imConvert = (params) => {
+const performConvert = (params) => {
   return new Promise(function (res, rej) {
     im.convert(params, (err) => {
       if (err) {
